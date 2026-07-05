@@ -2495,6 +2495,22 @@ root.render(<App />);
   function clearTimers() { timers.forEach(t => clearTimeout(t) || clearInterval(t)); timers = []; }
   function later(fn, ms) { const t = setTimeout(fn, ms); timers.push(t); return t; }
   function rep(fn, ms)   { const t = setInterval(fn, ms); timers.push(t); return t; }
+
+  const hooks = {
+    beforeCombat: [],
+    afterCombat: [],
+    onHit: [],
+    onKill: [],
+    onTick: []
+  };
+  function fireHook(name, ...args) {
+    const list = hooks[name];
+    if (!list || !Array.isArray(list)) return;
+    for (const fn of list) {
+      try { fn(...args); } catch (e) { console.error('[__saga hook]', name, e); }
+    }
+  }
+
   function rand(a, b) { return a + Math.random() * (b - a); }
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
@@ -4140,12 +4156,14 @@ root.render(<App />);
   }
 
   let combatRunning = false;
+  let battleEnd = false;
   function runCombat() {
     if (combatRunning) return; // never two battle loops at once
     combatRunning = true;
+    fireHook('beforeCombat');
     battleT0 = performance.now();
     esc.fatigueOn = false; esc.bloodOn = false; esc.duel = false; esc.duelTimer = 0;
-    let battleEnd = false;
+    battleEnd = false;
     let lastTs = performance.now();
     let rafId = null;
     combatPaused = false;
@@ -4332,6 +4350,7 @@ root.render(<App />);
       }
       const dt = Math.min(0.06, (ts - lastTs) / 1000);
       lastTs = ts;
+      fireHook('onTick', dt, ts);
       const W = window.innerWidth;
 
       [...leftTribe, ...rightTribe].forEach(s => {
@@ -4546,12 +4565,26 @@ root.render(<App />);
         else if (mp.right >= MP_MAX && rightCmd && rightCmd.alive) triggerSpecial('right');
       }
 
-      if ((aliveL <= 2 && aliveR <= 2) || aliveL === 0 || aliveR === 0) {
+      let combatEnd = null;
+      if (window.__saga && typeof window.__saga.endCondition === 'function') {
+        combatEnd = window.__saga.endCondition({ aliveL, aliveR, leftTribe, rightTribe });
+      } else if ((aliveL <= 2 && aliveR <= 2) || aliveL === 0 || aliveR === 0) {
+        let winnerSide = null;
+        if (aliveL === 0) winnerSide = 'right';
+        else if (aliveR === 0) winnerSide = 'left';
+        else if (aliveL > aliveR) winnerSide = 'left';
+        else if (aliveR > aliveL) winnerSide = 'right';
+        combatEnd = { winner: winnerSide };
+      }
+      if (combatEnd) {
         if (!battleEnd) {
           battleEnd = true;
           combatRunning = false;
           cancelAnimationFrame(rafId);
           stopBattleDust();
+          const winnerSide = combatEnd.winner != null ? combatEnd.winner : null;
+          fireHook('afterCombat', winnerSide);
+          if (window.__saga && window.__saga.suppressFinale) return;
           // The grand finisher cut-in (always shown), then on to the God of Smileys
           const goCh4 = () => later(() => startChapter4(), 1200);
           if (window.__cutscene) {
@@ -5027,6 +5060,7 @@ root.render(<App />);
       amount *= 0.2;
       target.hp -= amount;
       updateHp(target);
+      fireHook('onHit', s, target, amount, { crit: false, blocked: true, judged: targetJudged, light: opts.light, trueDmg: opts.trueDmg, noBlock: opts.noBlock, noMp: opts.noMp, noReact: opts.noReact, kb: opts.kb });
       if (target.hp <= 0) killBlow(s, target, dirX);
       return;
     }
@@ -5043,6 +5077,7 @@ root.render(<App />);
     }
     target.hp -= amount;
     updateHp(target);
+    fireHook('onHit', s, target, amount, { crit, judged: targetJudged, light: opts.light, trueDmg: opts.trueDmg, noBlock: opts.noBlock, noMp: opts.noMp, noReact: opts.noReact, kb: opts.kb });
     // MP: dealing damage charges your meter — and TAKING damage charges yours
     // too (comeback rule). Charge flows at FULL rate — ultimates come often.
     if (!opts.noMp && s && s.side) {
@@ -6364,6 +6399,7 @@ root.render(<App />);
   // crashes down in dust — THEN the ghost rises
   function killBlow(s, target, dirX) {
     target.alive = false;
+    fireHook('onKill', s, target);
     killCount++;
     if (s && s.el && s.alive) s.kills = (s.kills || 0) + 1; // the war remembers
     // A COMMANDER FALLS — the whole field feels it
@@ -6879,8 +6915,89 @@ root.render(<App />);
     }
   });
 
+  window.__saga = {
+    hooks,
+    fireHook,
+    endCondition: null,
+    suppressFinale: false,
+    get state() { return state; },
+    setState(v) { state = v; },
+    get leftTribe() { return leftTribe; },
+    get rightTribe() { return rightTribe; },
+    get combatPaused() { return combatPaused; },
+    set combatPaused(v) { combatPaused = v; },
+    get combatRunning() { return combatRunning; },
+    get battleEnd() { return battleEnd; },
+    get mp() { return mp; },
+    MP_MAX,
+    gainMp,
+    WEST_CLASSES,
+    EAST_CLASSES,
+    TRIBE_COLORS,
+    makeWorldSmiley,
+    assignClass,
+    makeWarriorLook,
+    makePeaceful,
+    applyDamage,
+    killBlow,
+    updateHp,
+    dmgPop,
+    healPop,
+    applyStun,
+    applyBurn,
+    cleanseStatuses,
+    meleeStrike,
+    rangedAttack,
+    fireProjectile,
+    spawnProjectile,
+    hitstop,
+    shakeBurst,
+    spawnImpactStar,
+    spawnSlashSmear,
+    spawnCastRing,
+    spawnAfterimage,
+    dashTrail,
+    triggerSpecial,
+    ultScatter,
+    ultBurst,
+    ultBlitz,
+    ultFlameNova,
+    ultFrostWave,
+    ultQuake,
+    westAirstrike,
+    eastSpiritDragon,
+    thunderStrike,
+    startChapter2,
+    startChapter3,
+    startChapter4,
+    reZero,
+    runCombat,
+    clearTimers,
+    later,
+    rep,
+    curtainTransition,
+    warBanner,
+    narrate,
+    showMsg,
+    hideMsg,
+    flashScreen,
+    showCard,
+    groundY,
+    updateTeamHud,
+    foesOf,
+    armWarriorsForBattle
+  };
+
 })();
 </script>
+
+<link rel="stylesheet" href="sim/menu.css">
+<script src="sim/meta.js"></script>
+<script src="sim/outfits.js"></script>
+<script src="sim/food.js"></script>
+<script src="sim/audio-ui.js"></script>
+<script src="sim/battle-modes.js"></script>
+<script src="sim/menu.js"></script>
 
 </body>
 </html>
