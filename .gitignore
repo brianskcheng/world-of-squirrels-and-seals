@@ -1,0 +1,20 @@
+# Local experiments and old versions
+v1/
+v2/
+v3/
+v4/
+wss-v1/
+
+# Draft assets not needed for the live site
+scraps/
+uploads/
+.thumbnail
+
+# Standalone demos and dev files (root only)
+/Rolling Smileys.html
+/Text Streaming Animations.html
+/Canvas.dc.html
+/support.js
+/sounds.js
+/tweaks-panel.jsx
+/cutscenes.js

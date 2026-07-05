@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>World of Squirrels & Seals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f2ead8;
+    --paper-2: #ebe2c4;
+    --ink: #4a3226;
+    --ink-soft: rgba(74, 50, 38, 0.55);
+    --grid: rgba(74, 50, 38, 0.07);
+    --sq: #a8622f;
+    --sq-wash: rgba(168, 98, 47, 0.16);
+    --sl: #5e7f99;
+    --sl-wash: rgba(94, 127, 153, 0.18);
+    --sm: #c44a3a;
+    --sm-wash: rgba(196, 74, 58, 0.16);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 30% 20%, var(--paper) 0%, var(--paper-2) 100%);
+    background-image: radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0);
+    background-size: 18px 18px;
+    background-color: var(--paper);
+    font-family: "Caveat", "Marker Felt", "Comic Sans MS", cursive;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.25rem;
+  }
+  main {
+    width: min(720px, 100%);
+    text-align: center;
+  }
+  h1 {
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    font-weight: 700;
+    line-height: 1.05;
+    margin-bottom: 0.35rem;
+  }
+  .subtitle {
+    font-size: clamp(1.2rem, 3vw, 1.55rem);
+    color: var(--ink-soft);
+    margin-bottom: 2.25rem;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+  }
+  .card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    border: 2px solid rgba(74, 50, 38, 0.18);
+    border-radius: 18px;
+    padding: 1.5rem 1.25rem 1.35rem;
+    background: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 10px 24px rgba(74, 50, 38, 0.08);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px rgba(74, 50, 38, 0.12);
+    border-color: rgba(74, 50, 38, 0.28);
+  }
+  .card.squirrels { background: linear-gradient(180deg, rgba(255,255,255,0.45), var(--sq-wash)); }
+  .card.smileys { background: linear-gradient(180deg, rgba(255,255,255,0.45), var(--sm-wash)); }
+  .card-icon {
+    font-size: 2.6rem;
+    line-height: 1;
+    margin-bottom: 0.65rem;
+  }
+  .card h2 {
+    font-size: 1.85rem;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+  }
+  .card p {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    line-height: 1.35;
+  }
+  .card .cta {
+    display: inline-block;
+    margin-top: 1rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    border: 2px solid rgba(74, 50, 38, 0.22);
+    background: rgba(255, 255, 255, 0.55);
+  }
+  .card.squirrels .cta { color: var(--sq); }
+  .card.smileys .cta { color: var(--sm); }
+</style>
+</head>
+<body>
+<main>
+  <h1>World of Squirrels &amp; Seals</h1>
+  <p class="subtitle">Pick a world and jump in.</p>
+  <div class="cards">
+    <a class="card squirrels" href="./squirrels-and-seals/">
+      <div class="card-icon">S &amp; S</div>
+      <h2>Squirrels &amp; Seals</h2>
+      <p>Build, battle, and explore a hand-drawn critter world.</p>
+      <span class="cta">Play now</span>
+    </a>
+    <a class="card smileys" href="./smileys/">
+      <div class="card-icon">:)</div>
+      <h2>World of Smileys</h2>
+      <p>Clash of Smileys — cutscenes, battles, and chaotic joy.</p>
+      <span class="cta">Play now</span>
+    </a>
+  </div>
+</main>
+</body>
+</html>

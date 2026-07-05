@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>World of Squirrels &amp; Seals</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="ss/menu.css" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3ecd8;
+    --paper-2: #ece2c4;
+    --ink: #4a3226;
+    --ink-soft: rgba(74, 50, 38, 0.55);
+    --grid: rgba(74, 50, 38, 0.07);
+    --sq: #a8622f;              /* squirrel chestnut */
+    --sq-wash: rgba(168, 98, 47, 0.16);
+    --sl: #5e7f99;              /* seal blue-grey */
+    --sl-wash: rgba(94, 127, 153, 0.18);
+    --sea: rgba(94, 127, 153, 0.22);
+    --grass: rgba(122, 138, 64, 0.20);
+    --sand: rgba(196, 160, 96, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at 30% 20%, var(--paper) 0%, var(--paper-2) 100%);
+    background-image: radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0);
+    background-size: 18px 18px;
+    background-color: var(--paper);
+    font-family: "Caveat", "Marker Felt", "Comic Sans MS", cursive;
+    color: var(--ink);
+    position: relative;
+  }
+
+  .ink      { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .ink-thin { stroke-width: 1.6; }
+  .ink-fill { fill: var(--ink); stroke: none; }
+
+  /* ============ WORLD LAYERS ============ */
+  .stage { position: fixed; inset: 0; overflow: hidden; }
+  #sky-fx, #landscape, #build-layer, #food-layer, #critter-layer, #fx-layer {
+    position: fixed; inset: 0; pointer-events: none;
+  }
+  #landscape { z-index: 1; }
+  #sky-fx { z-index: 2; }
+  #build-layer { z-index: 3; }
+  #food-layer { z-index: 4; }
+  #critter-layer { z-index: 5; }
+  #fx-layer { z-index: 40; }
+  #landscape svg { width: 100%; height: 100%; }
+
+  /* mood grading — a translucent wash whose color shifts per chapter */
+  #grade {
+    position: fixed; inset: 0; z-index: 30; pointer-events: none;
+    background: transparent; transition: background 2.5s ease;
+    mix-blend-mode: multiply;
+  }
+  body.mood-build #grade { background: rgba(228, 186, 106, 0.14); }
+  body.mood-war   #grade { background: rgba(176, 84, 54, 0.16); }
+  body.mood-dusk  #grade { background: rgba(120, 96, 150, 0.18); }
+  body.mood-night #grade { background: rgba(44, 52, 96, 0.30); }
+  body.mood-dawn  #grade { background: rgba(255, 196, 130, 0.12); }
+
+  /* sun ⇆ moon */
+  #sun-moon { position: fixed; left: 78vw; top: 12vh; width: 76px; height: 76px; z-index: 1; transition: transform 3s ease, opacity 2s ease; }
+  body.mood-night #sun-moon .sun-face { opacity: 0; }
+  body.mood-night #sun-moon .moon-face { opacity: 1; }
+  #sun-moon .moon-face { opacity: 0; transition: opacity 2s ease; }
+  #sun-moon .sun-face { transition: opacity 2s ease; }
+  #stars { position: fixed; inset: 0; z-index: 0; opacity: 0; transition: opacity 2.5s ease; pointer-events: none; }
+  body.mood-night #stars, body.mood-dusk #stars { opacity: 1; }
+  .star { position: absolute; font-size: 13px; color: var(--ink-soft); animation: twinkle 2.6s ease-in-out infinite; }
+  @keyframes twinkle { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+
+  /* sea waves drift */
+  .wave-drift  { animation: waveDrift 7s ease-in-out infinite; }
+  .wave-drift2 { animation: waveDrift 9s ease-in-out infinite reverse; }
+  @keyframes waveDrift { 0%,100% { transform: translateX(0); } 50% { transform: translateX(26px); } }
+  .oak-sway { transform-origin: 12% 100%; animation: oakSway 7s ease-in-out infinite; }
+  @keyframes oakSway { 0%,100% { transform: rotate(-0.6deg); } 50% { transform: rotate(0.7deg); } }
+
+  /* screen shake + hitstop */
+  @keyframes crackShake { 0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,4px); } 40% { transform: translate(6px,-5px); } 60% { transform: translate(-4px,-3px); } 80% { transform: translate(3px,4px); } }
+  body.shaking #landscape, body.shaking #critter-layer, body.shaking #build-layer, body.shaking #food-layer { animation: crackShake .5s ease-in-out; }
+  body.hitstop #critter-layer * { animation-play-state: paused !important; }
+
+  /* ============ CRITTERS ============ */
+  .critter {
+    position: absolute;
+    width: 120px; height: 120px;
+    transform-origin: 50% 90%;
+    pointer-events: auto;
+    cursor: pointer;
+    will-change: left, top, transform;
+  }
+  .critter svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .critter .rig { transform-origin: 50% 88%; }
+  .critter.face-l .rig { transform: scaleX(-1); }
+  .critter .ink { stroke-width: 2.6; }
+  .critter .ink-thin { stroke-width: 1.7; }
+
+  /* part hinge origins (set inline per part in JS via style.transformOrigin) */
+  .p-tail, .p-head, .p-armF, .p-armB, .p-legF, .p-legB, .p-flipF, .p-flipB, .p-earL, .p-earR, .p-item, .p-body, .p-jaw {
+    transform-box: view-box;
+  }
+
+  /* — idle — */
+  @keyframes cBreathe   { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.015,0.975); } }
+  @keyframes tailSway   { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(5deg); } }
+  @keyframes tailFlick  { 0%,100% { transform: rotate(-10deg); } 50% { transform: rotate(14deg); } }
+  @keyframes headTilt   { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(2.5deg); } }
+  @keyframes earTwitch  { 0%, 88%, 100% { transform: rotate(0deg); } 92% { transform: rotate(-10deg); } 96% { transform: rotate(4deg); } }
+  @keyframes blinkAnim  { 0%, 91%, 99%, 100% { transform: scaleY(1); } 94%,96% { transform: scaleY(0.08); } }
+  .critter .p-body  { animation: cBreathe 2.2s ease-in-out infinite; }
+  .critter .p-tail  { animation: tailSway 2.6s ease-in-out infinite; }
+  .critter .p-head  { animation: headTilt 3.4s ease-in-out infinite; }
+  .critter .p-earL, .critter .p-earR { animation: earTwitch 5.2s ease-in-out infinite; }
+  .critter .p-eyes  { animation: blinkAnim 4.6s linear infinite; transform-box: view-box; }
+
+  /* — walk: squirrel scamper (quick bouncy hops) — */
+  @keyframes sqScamper { 0%,100% { transform: translateY(0) rotate(0deg); } 30% { transform: translateY(-9px) rotate(-3deg); } 60% { transform: translateY(0) rotate(2deg); } }
+  @keyframes sqLegRun  { 0%,100% { transform: rotate(-24deg); } 50% { transform: rotate(28deg); } }
+  @keyframes sqArmRun  { 0%,100% { transform: rotate(22deg); } 50% { transform: rotate(-26deg); } }
+  @keyframes tailFlow  { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(10deg); } }
+  .critter.sq.act-walk .p-body { animation: sqScamper .34s ease-in-out infinite; }
+  .critter.sq.act-walk .p-legF { animation: sqLegRun .34s ease-in-out infinite; }
+  .critter.sq.act-walk .p-legB { animation: sqLegRun .34s ease-in-out infinite reverse; }
+  .critter.sq.act-walk .p-armF { animation: sqArmRun .34s ease-in-out infinite; }
+  .critter.sq.act-walk .p-tail { animation: tailFlow .34s ease-in-out infinite; }
+
+  /* — walk: seal galumph (inchworm scoot) — */
+  @keyframes slGalumph {
+    0%, 100% { transform: scale(1, 1) translateY(0); }
+    35%      { transform: scale(0.94, 1.10) translateY(-7px); }
+    70%      { transform: scale(1.08, 0.92) translateY(1px); }
+  }
+  @keyframes slFlipPaddle { 0%,100% { transform: rotate(-16deg); } 50% { transform: rotate(20deg); } }
+  @keyframes slTailBob { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+  .critter.sl.act-walk .p-body  { animation: slGalumph .55s ease-in-out infinite; }
+  .critter.sl.act-walk .p-flipF { animation: slFlipPaddle .55s ease-in-out infinite; }
+  .critter.sl.act-walk .p-flipB { animation: slTailBob .55s ease-in-out infinite; }
+
+  /* — dash: squirrel bound / seal belly-slide — */
+  @keyframes sqBound { 0%,100% { transform: translateY(0) rotate(-4deg) scale(1.04,.96); } 50% { transform: translateY(-16px) rotate(4deg) scale(.96,1.06); } }
+  .critter.sq.act-dash .p-body { animation: sqBound .26s ease-in-out infinite; }
+  .critter.sq.act-dash .p-tail { animation: tailFlow .26s ease-in-out infinite; }
+  .critter.sl.act-dash .rig-inner { transform: rotate(6deg); }
+  @keyframes slSlide { 0%,100% { transform: scale(1.10,0.88) translateY(3px); } 50% { transform: scale(1.14,0.84) translateY(4px); } }
+  .critter.sl.act-dash .p-body  { animation: slSlide .3s ease-in-out infinite; }
+  .critter.sl.act-dash .p-flipF { animation: none; transform: rotate(-30deg); }
+
+  /* — jump (one-shot, JS removes class) — */
+  @keyframes cJump {
+    0% { transform: translateY(0) scale(1.06,0.92); }
+    30% { transform: translateY(-46px) scale(0.94,1.1); }
+    62% { transform: translateY(-46px) scale(0.97,1.04) rotate(3deg); }
+    88% { transform: translateY(0) scale(1.1,0.88); }
+    100% { transform: translateY(0) scale(1,1); }
+  }
+  .critter.act-jump .p-body { animation: cJump .72s cubic-bezier(.3,.6,.4,1); }
+  .critter.act-jump .p-tail { animation: tailFlick .36s ease-in-out 2; }
+
+  /* — talk — */
+  @keyframes talkBob { 0%,100% { transform: rotate(0deg) translateY(0); } 30% { transform: rotate(-3deg) translateY(-1.5px); } 65% { transform: rotate(3deg) translateY(-1px); } }
+  @keyframes jawYap  { 0%,100% { transform: scaleY(0.4); } 40% { transform: scaleY(1); } }
+  .critter.act-talk .p-head { animation: talkBob .5s ease-in-out infinite; }
+  .critter.act-talk .p-jaw  { animation: jawYap .24s ease-in-out infinite; }
+
+  /* — eat: squirrel nibble / seal gulp — */
+  @keyframes nibblePaws { 0%,100% { transform: rotate(-6deg); } 50% { transform: rotate(4deg); } }
+  @keyframes nibbleHead { 0%,100% { transform: rotate(1deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(1px); } }
+  .critter.sq.act-eat .p-armF { animation: nibblePaws .16s ease-in-out infinite; }
+  .critter.sq.act-eat .p-head { animation: nibbleHead .16s ease-in-out infinite; }
+  .critter.sq.act-eat .p-tail { animation: tailSway 1.4s ease-in-out infinite; }
+  @keyframes gulpHead { 0% { transform: rotate(0); } 30% { transform: rotate(-14deg) translateY(-3px); } 60% { transform: rotate(-16deg) translateY(-4px); } 85% { transform: rotate(4deg); } 100% { transform: rotate(0); } }
+  @keyframes gulpBody { 0%,100% { transform: scale(1,1); } 60% { transform: scale(1.02,1.05); } 80% { transform: scale(1.06,0.96); } }
+  .critter.sl.act-eat .p-head { animation: gulpHead 1.1s ease-in-out infinite; }
+  .critter.sl.act-eat .p-body { animation: gulpBody 1.1s ease-in-out infinite; }
+
+  /* — wave / cheer / dance / clap — */
+  @keyframes pawWave { 0%,100% { transform: rotate(-118deg); } 50% { transform: rotate(-158deg); } }
+  .critter.act-wave .p-armF, .critter.act-wave .p-flipF { animation: pawWave .4s ease-in-out infinite; }
+  @keyframes cheerHop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-13px); } }
+  .critter.act-cheer .p-body { animation: cheerHop .42s ease-in-out infinite; }
+  .critter.act-cheer .p-armF, .critter.act-cheer .p-flipF { animation: pawWave .42s ease-in-out infinite; }
+  .critter.act-cheer .p-tail { animation: tailFlick .42s ease-in-out infinite; }
+  @keyframes danceWig { 0%,100% { transform: translateX(-3px) rotate(-4deg); } 50% { transform: translateX(3px) rotate(4deg); } }
+  .critter.act-dance .p-body { animation: danceWig .4s ease-in-out infinite; }
+  .critter.act-dance .p-tail { animation: tailFlick .4s ease-in-out infinite; }
+  .critter.act-dance .p-armF, .critter.act-dance .p-flipF { animation: pawWave .8s ease-in-out infinite; }
+  @keyframes flipClap { 0%,100% { transform: rotate(-34deg); } 50% { transform: rotate(6deg); } }
+  .critter.act-clap .p-flipF, .critter.act-clap .p-armF { animation: flipClap .22s ease-in-out infinite; }
+  .critter.act-clap .p-head { animation: talkBob .44s ease-in-out infinite; }
+
+  /* — sleep — */
+  .critter.act-sleep .p-body { animation: cBreathe 3.6s ease-in-out infinite; }
+  .critter.act-sleep .p-head { animation: none; transform: rotate(9deg) translateY(3px); }
+  .critter.act-sleep .p-eyes { animation: none; transform: scaleY(0.07); }
+  .critter.act-sleep .p-tail { animation: tailSway 5s ease-in-out infinite; }
+
+  /* — build (hammering) — */
+  @keyframes hammerArm { 0%,100% { transform: rotate(-52deg); } 45% { transform: rotate(26deg); } 55% { transform: rotate(30deg); } }
+  @keyframes hammerBod { 0%,100% { transform: rotate(-2deg); } 50% { transform: rotate(3deg) translateY(1px); } }
+  .critter.act-build .p-armF, .critter.act-build .p-flipF { animation: hammerArm .5s ease-in-out infinite; }
+  .critter.act-build .p-body { animation: hammerBod .5s ease-in-out infinite; }
+
+  /* — combat: windup / strike / hurt / bonked — */
+  @keyframes strikeLunge { 0% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-9px) rotate(-7deg) scale(.96,1.04); } 55% { transform: translateX(16px) rotate(6deg) scale(1.08,.94); } 100% { transform: translateX(0) rotate(0); } }
+  .critter.act-strike .p-body { animation: strikeLunge .3s cubic-bezier(.4,0,.4,1); }
+  @keyframes tailWhipAtk { 0% { transform: rotate(0); } 30% { transform: rotate(-42deg); } 60% { transform: rotate(46deg); } 100% { transform: rotate(0); } }
+  .critter.sq.act-strike .p-tail { animation: tailWhipAtk .3s cubic-bezier(.4,0,.4,1); }
+  @keyframes bellyPop { 0% { transform: scale(1,1); } 35% { transform: scale(.88,1.12); } 65% { transform: scale(1.16,.86); } 100% { transform: scale(1,1); } }
+  .critter.sl.act-strike .p-body { animation: bellyPop .32s cubic-bezier(.4,0,.4,1); }
+  @keyframes hurtShake { 0%,100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-5px) rotate(-5deg); } 65% { transform: translateX(5px) rotate(4deg); } }
+  .critter.act-hurt .p-body { animation: hurtShake .3s ease-in-out; }
+  .critter.act-hurt { filter: brightness(1.5) sepia(.3) saturate(2); }
+  .critter.act-bonked { cursor: default; pointer-events: none; }
+  .critter.act-bonked .rig-inner { transform: rotate(var(--bonk-rot, 96deg)) translateY(6px); transition: transform .5s cubic-bezier(.5,1.6,.4,1); }
+  .critter.act-bonked .p-body, .critter.act-bonked .p-head, .critter.act-bonked .p-tail,
+  .critter.act-bonked .p-armF, .critter.act-bonked .p-legF, .critter.act-bonked .p-legB,
+  .critter.act-bonked .p-flipF, .critter.act-bonked .p-flipB, .critter.act-bonked .p-eyes,
+  .critter.act-bonked .p-earL, .critter.act-bonked .p-earR { animation: none; }
+  .critter .rig-inner { transition: transform .5s ease; transform-origin: 50% 80%; transform-box: view-box; }
+
+  /* scared tremble */
+  @keyframes tremble { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-1.6px); } 75% { transform: translateX(1.6px); } }
+  .critter.act-scared .p-body { animation: tremble .14s linear infinite; }
+
+  /* champion glow + player marker */
+  .critter.champion .rig { filter: drop-shadow(0 0 7px rgba(232, 179, 58, 0.55)); }
+  .critter .player-arrow {
+    position: absolute; left: 50%; top: -34px; transform: translateX(-50%);
+    font-size: 26px; color: var(--ink); opacity: 0; transition: opacity .3s;
+    animation: arrowBob .7s ease-in-out infinite; text-shadow: 0 1px 0 var(--paper);
+  }
+  .critter.is-player .player-arrow { opacity: 1; }
+  @keyframes arrowBob { 0%,100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
+
+  /* HP pip above battle critters */
+  .hp-pip { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); width: 58%; height: 6px;
+    border: 1.6px solid var(--ink); border-radius: 4px; background: rgba(243,236,216,.8); opacity: 0; transition: opacity .3s; }
+  .critter.in-battle .hp-pip { opacity: 1; }
+  .hp-pip .fill { height: 100%; width: 100%; background: var(--ink-soft); border-radius: 2px; transition: width .25s ease; }
+
+  /* speech bubble */
+  .bubble {
+    position: absolute; bottom: 103%; left: 50%;
+    transform: translateX(-50%) translateY(-2px) rotate(-1deg);
+    background: rgba(243, 236, 216, 0.95);
+    border: 1.8px solid var(--ink); border-radius: 12px;
+    padding: 3px 11px; font-size: 19px; font-weight: 600; white-space: nowrap;
+    color: var(--ink); pointer-events: none; z-index: 60;
+    animation: bubblePop .18s cubic-bezier(.3,1.5,.5,1);
+  }
+  .bubble::after {
+    content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+    border: 6px solid transparent; border-top-color: var(--ink);
+  }
+  @keyframes bubblePop { 0% { transform: translateX(-50%) translateY(6px) scale(.4); opacity: 0; } 100% { transform: translateX(-50%) translateY(-2px) scale(1); opacity: 1; } }
+
+  /* ============ FX ============ */
+  .fx-abs { position: absolute; pointer-events: none; }
+  .heart-fx { font-size: 22px; color: #c25a5a; animation: heartUp 1s ease-out forwards; }
+  @keyframes heartUp { 0% { transform: translateY(0) scale(.5); opacity: 0; } 20% { opacity: 1; transform: translateY(-10px) scale(1.1); } 100% { transform: translateY(-44px) scale(.9); opacity: 0; } }
+  .zzz-fx { font-family: Caveat, cursive; font-size: 22px; color: var(--ink-soft); animation: zzzUp 2.2s ease-out forwards; }
+  @keyframes zzzUp { 0% { transform: translate(0,0) rotate(0); opacity: 0; } 15% { opacity: .9; } 100% { transform: translate(16px,-46px) rotate(14deg); opacity: 0; } }
+  .crumb { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--ink-soft); animation: crumbFall .7s ease-in forwards; }
+  @keyframes crumbFall { 0% { transform: translate(0,0); opacity: .9; } 100% { transform: translate(var(--dx,6px), 22px); opacity: 0; } }
+  .dust-puff { position: absolute; border: 1.7px solid var(--ink-soft); border-radius: 50%; opacity: .55; animation: puffOut .5s ease-out forwards; }
+  @keyframes puffOut { 0% { transform: scale(.3); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
+  .dmg-pop {
+    position: absolute; font-family: Caveat, cursive; font-weight: 700; font-size: 26px; color: var(--ink);
+    text-shadow: 1px 1px 0 var(--paper); animation: dmgUp .7s ease-out forwards; pointer-events: none;
+  }
+  .dmg-pop.crit { font-size: 36px; color: #b0452e; }
+  .dmg-pop.heal { color: #4e7d46; }
+  @keyframes dmgUp { 0% { transform: translateY(0) scale(.6) rotate(-4deg); opacity: 0; } 18% { opacity: 1; transform: translateY(-14px) scale(1.15) rotate(2deg); } 100% { transform: translateY(-46px) scale(.95) rotate(-2deg); opacity: 0; } }
+  .hit-star { position: absolute; pointer-events: none; }
+  .afterimage { position: absolute; opacity: .3; pointer-events: none; }
+  .afterimage svg { width: 100%; height: 100%; overflow: visible; }
+  .dizzy-stars { position: absolute; left: 50%; top: -8px; width: 54px; height: 24px; margin-left: -27px; pointer-events: none; }
+  .dizzy-stars span { position: absolute; font-size: 15px; color: var(--ink-soft); animation: dizzyOrbit 1.4s linear infinite; }
+  .dizzy-stars span:nth-child(2) { animation-delay: -.47s; }
+  .dizzy-stars span:nth-child(3) { animation-delay: -.94s; }
+  @keyframes dizzyOrbit {
+    0%   { transform: translate(0px, 0px) scale(1); opacity: .9; }
+    25%  { transform: translate(20px, -7px) scale(.7); opacity: .5; }
+    50%  { transform: translate(40px, 0px) scale(1); opacity: .9; }
+    75%  { transform: translate(20px, 7px) scale(1.2); opacity: 1; }
+    100% { transform: translate(0px, 0px) scale(1); opacity: .9; }
+  }
+  .ripple-fx { position: absolute; border: 1.8px solid var(--sl); border-radius: 50%; transform: scaleY(.32); opacity: .7; animation: rippleOut .8s ease-out forwards; }
+  @keyframes rippleOut { 0% { opacity: .7; scale: .3; } 100% { opacity: 0; scale: 1.6; } }
+  .splash-drop { position: absolute; width: 5px; height: 8px; border-radius: 50% 50% 60% 60%; background: var(--sl); opacity: .8; animation: splashArc .55s ease-in forwards; }
+  @keyframes splashArc { 0% { transform: translate(0,0) scale(1); opacity: .85; } 100% { transform: translate(var(--dx, 10px), var(--dy, 26px)) scale(.6); opacity: 0; } }
+
+  /* projectiles */
+  .proj { position: absolute; z-index: 39; pointer-events: none; }
+  .proj svg { width: 100%; height: 100%; overflow: visible; }
+  @keyframes projSpin { to { transform: rotate(360deg); } }
+  .proj.spin svg { animation: projSpin .5s linear infinite; }
+
+  /* rally / heal ring */
+  .rally-ring { position: absolute; inset: -12px; border: 2.6px solid var(--ink); border-radius: 50%; opacity: 0; animation: rallyOut .8s ease-out forwards; pointer-events: none; }
+  .rally-ring.heal { border-color: #4e7d46; }
+  @keyframes rallyOut { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+
+  /* ============ TITLE + TOP BUTTONS ============ */
+  .title {
+    position: fixed; top: 18px; left: 30px; z-index: 100;
+    font-size: clamp(26px, 3.3vw, 40px); font-weight: 700; transform: rotate(-2deg); line-height: 0.95;
+    max-width: max(240px, calc(100vw - 590px));
+  }
+  .title small { display: block; font-size: clamp(14px, 1.6vw, 19px); font-weight: 400; opacity: 0.65; margin-top: 3px; }
+  .title .squig { width: 130px; display: block; margin-top: 2px; }
+  .top-btns { position: fixed; top: 20px; right: 24px; z-index: 100; display: flex; gap: 10px; }
+  .hand-btn {
+    font-family: Caveat, cursive; font-size: 18px; padding: 6px 14px;
+    background: rgba(243, 236, 216, 0.8); color: var(--ink);
+    border: 1.6px solid var(--ink); border-radius: 12px; cursor: pointer;
+  }
+  .hand-btn:nth-child(odd) { transform: rotate(1.4deg); }
+  .hand-btn:nth-child(even) { transform: rotate(-1.6deg); }
+  .hand-btn.primary { background: var(--ink); color: var(--paper); box-shadow: 3px 3px 0 rgba(74,50,38,.22); font-weight: 700; }
+  .hand-btn:hover { transform: scale(1.05); }
+
+  /* ============ STORY HUD ============ */
+  .saga-clock {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%) rotate(-1deg); z-index: 100;
+    border: 2px solid var(--ink); border-radius: 14px; background: rgba(243,236,216,.9);
+    padding: 6px 22px; text-align: center; display: none;
+  }
+  .saga-clock .big { font-size: 30px; font-weight: 700; display: block; line-height: 1; }
+  .saga-clock span:last-child { font-size: 17px; opacity: .6; }
+  .saga-banner {
+    position: fixed; top: 84px; left: 50%; transform: translateX(-50%) rotate(.6deg); z-index: 100;
+    font-size: 21px; opacity: .75; display: none; text-align: center;
+  }
+  .saga-banner small { display: block; font-size: 16px; opacity: .8; }
+
+  .war-banner {
+    position: fixed; top: 34vh; left: 50%; transform: translate(-50%,-50%) scale(.6); z-index: 130;
+    font-size: 54px; font-weight: 700; color: var(--ink); text-align: center;
+    opacity: 0; pointer-events: none; transition: transform .3s cubic-bezier(.2,1.4,.4,1), opacity .25s;
+    text-shadow: 2px 2px 0 var(--paper); white-space: nowrap;
+  }
+  .war-banner small { display: block; font-size: 22px; font-weight: 400; letter-spacing: 3px; opacity: .75; }
+  .war-banner.show { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-1.5deg); }
+
+  /* chapter card */
+  .chapter-card {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%) rotate(-1.5deg) scale(.94);
+    z-index: 140; text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .chapter-card.show { opacity: 1; transform: translate(-50%,-50%) rotate(-1.5deg) scale(1); }
+  .chapter-card .num { font-size: 22px; opacity: .55; letter-spacing: 2.5px; }
+  .chapter-card .name { font-size: 84px; font-weight: 700; line-height: 1; }
+  .chapter-card .sub { font-size: 23px; opacity: .7; margin-top: 6px; }
+
+  /* curtain */
+  .curtain {
+    position: fixed; inset: 0; z-index: 300; background: var(--ink);
+    transform: translateY(-101%); transition: transform .65s cubic-bezier(.6,0,.3,1);
+    display: flex; align-items: center; justify-content: center; text-align: center; color: var(--paper);
+  }
+  .curtain.show { transform: translateY(0); }
+  .curtain.exit { transform: translateY(101%); }
+  .curtain .c-num { font-size: 22px; letter-spacing: 4px; opacity: .6; }
+  .curtain .c-name { font-size: 92px; font-weight: 700; line-height: 1.05; }
+  .curtain .c-sub { font-size: 24px; opacity: .75; margin-top: 8px; }
+
+  /* subtitles */
+  .subtitle-bar {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 260;
+    max-width: 72vw; padding: 10px 26px 8px; text-align: center;
+    background: rgba(40, 26, 18, 0.82); color: #f6efdd; border-radius: 14px;
+    opacity: 0; pointer-events: none; transition: opacity .3s ease;
+  }
+  .subtitle-bar.show { opacity: 1; }
+  .subtitle-bar .subtitle-text { font-size: 26px; line-height: 1.15; }
+  .subtitle-bar .subtitle-speaker { font-size: 15px; opacity: .6; letter-spacing: 1px; margin-top: 2px; }
+
+  /* flash */
+  .flash { position: fixed; inset: 0; background: #fffbe8; opacity: 0; pointer-events: none; z-index: 290; }
+  .flash.go { animation: flashGo .16s ease-out; }
+  @keyframes flashGo { 0% { opacity: .9; } 100% { opacity: 0; } }
+
+  /* bottom-right HUD */
+  .saga-hud { position: fixed; bottom: 18px; right: 18px; z-index: 250; display: flex; gap: 9px; }
+  .saga-hud button {
+    font-family: Caveat, cursive; font-size: 17px; padding: 5px 13px;
+    background: rgba(243,236,216,.85); border: 1.6px solid var(--ink); color: var(--ink);
+    border-radius: 11px; cursor: pointer;
+  }
+  .saga-hud button:hover { background: var(--ink); color: var(--paper); }
+
+  /* ============ BATTLE HUD ============ */
+  .team-hud {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 110;
+    display: none; gap: 26px; align-items: flex-start;
+  }
+  .team-hud.on { display: flex; }
+  .team-block { width: 27vw; max-width: 350px; }
+  .team-block .team-name { font-size: 21px; font-weight: 700; letter-spacing: 1.5px; }
+  .team-block.east { text-align: right; }
+  .tbar { height: 12px; border: 2px solid var(--ink); border-radius: 7px; background: rgba(243,236,216,.85); overflow: hidden; margin-top: 3px; }
+  .tbar .fill { height: 100%; width: 100%; transition: width .3s ease; border-radius: 4px; }
+  .team-block.west .fill { background: var(--sq); }
+  .team-block.east .fill { background: var(--sl); float: right; }
+  .team-hud .vs { font-size: 30px; font-weight: 700; margin-top: 6px; transform: rotate(-4deg); }
+
+  /* player card */
+  .player-hud {
+    position: fixed; bottom: 18px; left: 22px; z-index: 120; display: none;
+    border: 2.2px solid var(--ink); border-radius: 16px; background: rgba(243,236,216,.92);
+    padding: 10px 16px 12px; transform: rotate(-.8deg); min-width: 265px;
+    box-shadow: 3px 4px 0 rgba(74,50,38,.14);
+  }
+  .player-hud.on { display: block; }
+  .player-hud .ph-top { display: flex; align-items: center; gap: 10px; }
+  .player-hud .ph-portrait { width: 52px; height: 52px; flex: none; }
+  .player-hud .ph-portrait svg { width: 100%; height: 100%; overflow: visible; }
+  .player-hud .ph-name { font-size: 23px; font-weight: 700; line-height: 1; }
+  .player-hud .ph-class { font-size: 15px; opacity: .6; }
+  .player-hud .bar { height: 11px; border: 1.8px solid var(--ink); border-radius: 6px; margin-top: 6px; background: rgba(255,255,255,.5); overflow: hidden; }
+  .player-hud .bar .fill { height: 100%; transition: width .2s ease; }
+  .player-hud .bar.hp .fill { background: #b0452e; }
+  .player-hud .bar.mp .fill { background: #3f6f8f; }
+  .player-hud .bar-label { font-size: 13px; opacity: .55; letter-spacing: 1px; display: flex; justify-content: space-between; margin-top: 4px; }
+  .player-hud .special-ready { font-size: 17px; font-weight: 700; color: #8a5a12; opacity: 0; transition: opacity .3s; margin-top: 4px; text-align: center; }
+  .player-hud .special-ready.on { opacity: 1; animation: readyPulse .8s ease-in-out infinite; }
+  @keyframes readyPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+  /* controls hint */
+  .controls-hint {
+    position: fixed; bottom: 18px; right: 18px; z-index: 120; display: none;
+    border: 2px solid var(--ink); border-radius: 14px; background: rgba(243,236,216,.92);
+    padding: 9px 15px; transform: rotate(.8deg); font-size: 17px; line-height: 1.5;
+  }
+  .controls-hint.on { display: block; }
+  .controls-hint b { display: inline-block; border: 1.5px solid var(--ink); border-radius: 6px; padding: 0 7px; margin-right: 5px; font-weight: 600; background: rgba(255,255,255,.55); font-size: 15px; }
+  .controls-hint .ch-row { white-space: nowrap; }
+
+  /* touch buttons (small screens / mouse users) */
+  .touch-actions { position: fixed; bottom: 108px; right: 22px; z-index: 120; display: none; flex-direction: column; gap: 10px; }
+  .touch-actions.on { display: flex; }
+  .touch-actions button {
+    width: 74px; height: 74px; border-radius: 50%; border: 2.4px solid var(--ink);
+    background: rgba(243,236,216,.92); font-family: Caveat, cursive; font-size: 17px; font-weight: 700;
+    color: var(--ink); cursor: pointer; line-height: 1; box-shadow: 2px 3px 0 rgba(74,50,38,.18);
+  }
+  .touch-actions button:active { transform: scale(.92); }
+  .touch-actions button.sp.ready { background: #e8b33a; animation: readyPulse .8s ease-in-out infinite; }
+
+  /* ============ OVERLAYS (side pick, messages) ============ */
+  .pick-overlay {
+    position: fixed; inset: 0; z-index: 270; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(58, 38, 26, 0.42); backdrop-filter: blur(2px);
+  }
+  .pick-overlay.on { display: flex; }
+  .pick-title { font-size: 52px; font-weight: 700; color: var(--paper); text-shadow: 2px 2px 0 rgba(40,20,10,.5); transform: rotate(-1.4deg); }
+  .pick-sub { font-size: 22px; color: var(--paper); opacity: .85; margin-bottom: 26px; }
+  .pick-row { display: flex; gap: 34px; }
+  .pick-card {
+    width: 265px; border: 2.6px solid var(--ink); border-radius: 20px; background: var(--paper);
+    padding: 18px 18px 14px; cursor: pointer; text-align: center;
+    transition: transform .18s cubic-bezier(.3,1.4,.4,1), box-shadow .18s;
+  }
+  .pick-card:hover { transform: translateY(-7px) scale(1.03) rotate(-.7deg); box-shadow: 5px 8px 0 rgba(40,20,10,.3); }
+  .pick-card .pc-art { width: 150px; height: 150px; margin: 0 auto; }
+  .pick-card .pc-art svg { width: 100%; height: 100%; overflow: visible; }
+  .pick-card .pc-name { font-size: 31px; font-weight: 700; line-height: 1; }
+  .pick-card .pc-desc { font-size: 17px; opacity: .68; margin-top: 5px; line-height: 1.25; }
+  .pick-card .pc-moves { margin-top: 9px; font-size: 15.5px; text-align: left; line-height: 1.45; border-top: 1.6px dashed var(--ink-soft); padding-top: 7px; }
+  .pick-card .pc-moves b { border: 1.4px solid var(--ink); border-radius: 5px; padding: 0 5px; font-weight: 600; background: rgba(255,255,255,.6); font-size: 13.5px; }
+
+  .saga-message {
+    position: fixed; top: 26vh; left: 50%; transform: translateX(-50%) rotate(-1deg); z-index: 150;
+    font-size: 44px; font-weight: 700; text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity .5s ease; text-shadow: 2px 2px 0 var(--paper); line-height: 1.05;
+  }
+  .saga-message .small { font-size: 22px; font-weight: 400; opacity: .7; display: block; margin-top: 6px; }
+  .saga-message.show { opacity: 1; }
+
+  .choice-row {
+    position: fixed; bottom: 13vh; left: 50%; transform: translateX(-50%); z-index: 160;
+    display: none; gap: 22px;
+  }
+  .choice-row.on { display: flex; }
+  .choice-btn {
+    font-family: Caveat, cursive; font-size: 25px; font-weight: 700; padding: 12px 26px;
+    background: var(--paper); border: 2.4px solid var(--ink); color: var(--ink); border-radius: 16px;
+    cursor: pointer; box-shadow: 3px 4px 0 rgba(74,50,38,.2); transition: transform .15s;
+  }
+  .choice-btn:hover { transform: translateY(-4px) rotate(-1deg); }
+  .choice-btn small { display: block; font-size: 16px; font-weight: 400; opacity: .65; }
+
+  .hint {
+    position: fixed; top: 108px; left: 34px; z-index: 90; font-size: 20px; opacity: .6;
+    transform: rotate(-2.5deg); line-height: 1.2; transition: opacity 1s;
+  }
+  body.saga-running .hint { opacity: 0; }
+  body.battle-on .top-btns { display: none; }
+  body.battle-on .title { opacity: 0; transition: opacity .6s; }
+
+  /* driftwood wall */
+  #great-wall {
+    position: fixed; left: 52vw; bottom: 8vh; width: 108px; height: 0; margin-left: -54px;
+    z-index: 6; transition: height 1.1s cubic-bezier(.5,1.3,.4,1); pointer-events: none;
+  }
+  #great-wall svg { width: 100%; height: 100%; overflow: visible; }
+</style>
+</head>
+<body>
+
+<div class="title" data-screen-label="World of Squirrels and Seals">
+  World of Squirrels &amp; Seals
+  <small id="title-sub">the meadow, the shore — and the story between them</small>
+  <svg class="squig" viewBox="0 0 110 8">
+    <path class="ink ink-thin" d="M2 5 Q 15 1, 28 5 T 54 5 T 80 5 T 108 5" />
+  </svg>
+</div>
+
+<div class="hint" id="hint">click a critter to say hi 〰<br>they walk, snack &amp; nap on their own</div>
+
+<div class="top-btns">
+  <button class="hand-btn primary" id="btn-menu">⚑ Menu</button>
+  <button class="hand-btn" id="btn-mute">🔊 Sound</button>
+  <button class="hand-btn" id="btn-subs">💬 Subtitles</button>
+</div>
+
+<div id="stars"></div>
+<div id="landscape"></div>
+<div id="sun-moon">
+  <svg viewBox="0 0 100 100">
+    <g class="sun-face">
+      <circle class="ink ink-thin" cx="50" cy="50" r="26" fill="rgba(255,238,170,0.75)" />
+      <path class="ink ink-thin" d="M 50 12 L 50 4 M 78 22 L 84 16 M 88 50 L 96 50 M 78 78 L 84 84 M 50 88 L 50 96 M 22 78 L 16 84 M 12 50 L 4 50 M 22 22 L 16 16" />
+    </g>
+    <g class="moon-face">
+      <path class="ink ink-thin" d="M 62 22 A 30 30 0 1 0 62 78 A 24 24 0 1 1 62 22 Z" fill="rgba(240,238,220,0.9)" />
+    </g>
+  </svg>
+</div>
+<div class="stage" id="stage"></div>
+<div id="build-layer"></div>
+<div id="great-wall"><svg viewBox="0 0 108 400" preserveAspectRatio="none"><g id="wall-wood"></g><g id="wall-cracks"></g></svg></div>
+<div id="food-layer"></div>
+<div id="critter-layer"></div>
+<div id="fx-layer"></div>
+<div id="grade"></div>
+
+<!-- battle HUD -->
+<div class="team-hud" id="team-hud">
+  <div class="team-block west">
+    <div class="team-name">SQUIRRELS</div>
+    <div class="tbar"><div class="fill" id="thp-west"></div></div>
+  </div>
+  <div class="vs">vs</div>
+  <div class="team-block east">
+    <div class="team-name">SEALS</div>
+    <div class="tbar"><div class="fill" id="thp-east"></div></div>
+  </div>
+</div>
+
+<div class="player-hud" id="player-hud">
+  <div class="ph-top">
+    <div class="ph-portrait" id="ph-portrait"></div>
+    <div>
+      <div class="ph-name" id="ph-name">—</div>
+      <div class="ph-class" id="ph-class">—</div>
+    </div>
+  </div>
+  <div class="bar-label"><span>HEART</span><span id="ph-hp-num"></span></div>
+  <div class="bar hp"><div class="fill" id="ph-hp"></div></div>
+  <div class="bar-label"><span>SPIRIT</span><span id="ph-mp-num"></span></div>
+  <div class="bar mp"><div class="fill" id="ph-mp"></div></div>
+  <div class="special-ready" id="ph-ready">✦ special ready — press K ✦</div>
+</div>
+
+<div class="controls-hint" id="controls-hint">
+  <div class="ch-row"><b>WASD</b>/<b>←↑↓→</b> move</div>
+  <div class="ch-row"><b>J</b>/<b>space</b> attack &nbsp; <b>L</b> dash</div>
+  <div class="ch-row"><b>K</b> special &nbsp;·&nbsp; or click to move / tap a foe</div>
+</div>
+
+<div class="touch-actions" id="touch-actions">
+  <button id="ta-sp" class="sp">✦<br>special</button>
+  <button id="ta-dash">〰<br>dash</button>
+  <button id="ta-atk">✶<br>bonk</button>
+</div>
+
+<!-- overlays -->
+<div class="pick-overlay" id="pick-overlay">
+  <div class="pick-title" id="pick-title">Choose your champion</div>
+  <div class="pick-sub" id="pick-sub">this fight is yours to win — who do you stand with?</div>
+  <div class="pick-row" id="pick-row"></div>
+</div>
+
+<div class="saga-clock" id="saga-clock"><span class="big" id="clock-big">Day 1</span><span id="clock-sub">of 60</span></div>
+<div class="saga-banner" id="saga-banner"><span id="banner-title"></span><small id="banner-sub"></small></div>
+<div class="war-banner" id="war-banner"></div>
+<div class="chapter-card" id="chapter-card">
+  <div class="num" id="ch-num">CHAPTER ONE</div>
+  <div class="name" id="ch-name">The Meadow &amp; the Shore</div>
+  <div class="sub" id="ch-sub">a peaceful beginning</div>
+</div>
+<div class="saga-message" id="saga-message"></div>
+<div class="choice-row" id="choice-row"></div>
+
+<div class="subtitle-bar" id="subtitle-bar">
+  <div class="subtitle-text" id="subtitle-text"></div>
+  <div class="subtitle-speaker" id="subtitle-speaker"></div>
+</div>
+
+<div class="saga-hud" id="saga-hud" style="display:none">
+  <button id="btn-skip">Skip ▸</button>
+  <button id="btn-quit">⚑ Menu</button>
+</div>
+
+<div class="flash" id="flash"></div>
+<div class="curtain" id="curtain">
+  <div>
+    <div class="c-num" id="curtain-num">CHAPTER</div>
+    <div class="c-name" id="curtain-name"></div>
+    <div class="c-sub" id="curtain-sub"></div>
+  </div>
+</div>
+
+<script src="sounds.js"></script>
+<script src="ss/critters.js"></script>
+<script src="ss/meta.js"></script>
+<script src="ss/outfits.js"></script>
+<script src="ss/world.js"></script>
+<script src="ss/playground.js"></script>
+<script src="ss/build.js"></script>
+<script src="ss/specials.js"></script>
+<script src="ss/battle.js"></script>
+<script src="ss/finale.js"></script>
+<script src="ss/menu.js"></script>
+<script src="ss/audio.js"></script>
+<script>
+  // ============ BOOT ============
+  (function () {
+    // Squirrels chitter, seals bark — route this world's voice profiles to
+    // real animal calls (other worlds keep their Animalese voices).
+    if (window.__sfx && window.__sfx.setVoiceSpecies) window.__sfx.setVoiceSpecies({
+      child1: 'sq', child2: 'sq', flying: 'sq', healer: 'sq', wizard: 'sq',
+      water: 'sl', villager: 'sl', time: 'sl', spear: 'sl', giant: 'sl'
+    });
+    SS.world.init();
+    SS.audio.init(); // apply saved mixer / voice-tuning settings
+    SS.playground.start({ quiet: true });
+    SS.game.init();   // main menu over the live meadow
+
+    // 🔊 opens the Sound Studio (mixer, voice tuning, soundboard)
+    const btnMute = document.getElementById('btn-mute');
+    btnMute.addEventListener('click', () => {
+      if (window.__sfx) window.__sfx.unlock();
+      SS.audio.open();
+    });
+    const btnSubs = document.getElementById('btn-subs');
+    btnSubs.addEventListener('click', () => {
+      const on = SS.world.toggleSubtitles();
+      btnSubs.textContent = on ? '💬 Subtitles' : '💬 Subs off';
+    });
+    document.getElementById('btn-skip').addEventListener('click', () => SS.world.skip());
+
+    // wake audio on first interaction
+    window.addEventListener('pointerdown', () => { if (window.__sfx) window.__sfx.unlock(); }, { once: true });
+  })();
+</script>
+</body>
+</html>
